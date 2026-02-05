@@ -1,6 +1,27 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# ── Upgrade mode detection ────────────────────────────────────────────────────
+# When AGENT_COACH_UPGRADE=1, skip all prompts and use environment variables
+if [[ "${AGENT_COACH_UPGRADE:-}" == "1" ]]; then
+  UPGRADE_MODE=true
+  USER_NAME="${AGENT_COACH_USER_NAME:?Required in upgrade mode}"
+  PERSONALITY="${AGENT_COACH_PERSONALITY:?Required in upgrade mode}"
+  COACH_NAME="${AGENT_COACH_COACH_NAME:?Required in upgrade mode}"
+  STYLE="${AGENT_COACH_STYLE:-balanced}"
+  OPINION="${AGENT_COACH_OPINION:-moderate}"
+  SELF_ASSESSMENT="${AGENT_COACH_SELF_ASSESSMENT:-}"
+  # Derive target choice from install_target string
+  case "${AGENT_COACH_TARGET:-}" in
+    codex) TARGET_CHOICE=1 ;;
+    claude-code) TARGET_CHOICE=2 ;;
+    custom) TARGET_CHOICE=3 ;;
+    *) TARGET_CHOICE=2 ;;
+  esac
+else
+  UPGRADE_MODE=false
+fi
+
 if [ -z "${BASH_VERSION:-}" ]; then
   echo "This script requires bash. Run with: bash install.sh" >&2
   exit 1
@@ -13,7 +34,13 @@ fi
 # ─────────────────────────────────────────────────────────────────────────────
 
 STATE_DIR="$HOME/.agent-coach"
-VERSION=1
+# Read version from VERSION file; fall back to embedded version for curl installs.
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+EMBEDDED_VERSION=2
+VERSION="$EMBEDDED_VERSION"
+if [[ -f "${SCRIPT_DIR}/VERSION" ]]; then
+  VERSION=$(cat "${SCRIPT_DIR}/VERSION" 2>/dev/null || echo "$EMBEDDED_VERSION")
+fi
 PARTIAL_INSTALL=false
 
 # ── Colors & formatting ──────────────────────────────────────────────────────
@@ -72,7 +99,7 @@ prompt_choice() {
   while true; do
     printf '%b  Choice [1-%d]%b: ' "${BOLD}" "${#options[@]}" "${RESET}"
     read -r choice
-    if [[ "$choice" =~ ^[0-9]+$ ]] && (( choice >= 1 && choice <= ${#options[@]} )); then
+    if [[ "$choice" =~ ^[0-9]+$ ]] && ((choice >= 1 && choice <= ${#options[@]})); then
       printf -v "$var_name" '%s' "$choice"
       return
     fi
@@ -178,13 +205,15 @@ trap cleanup_on_failure EXIT
 
 # ── Step 1: Banner ──────────────────────────────────────────────────────────
 
-banner
+if [[ "$UPGRADE_MODE" == "false" ]]; then
+  banner
+fi
 
 # ── Check for existing installation ─────────────────────────────────────────
 
-if [[ -f "${STATE_DIR}/profile.json" ]]; then
+if [[ "$UPGRADE_MODE" == "false" && -f "${STATE_DIR}/profile.json" ]]; then
   echo -e "  ${YELLOW}An existing Agent Coach installation was found.${RESET}"
-  existing_coach=$(python3 -c "import json,sys; print(json.load(sys.stdin).get('personality','unknown'))" < "${STATE_DIR}/profile.json" 2>/dev/null || echo "unknown")
+  existing_coach=$(python3 -c "import json,sys; print(json.load(sys.stdin).get('personality','unknown'))" <"${STATE_DIR}/profile.json" 2>/dev/null || echo "unknown")
   echo -e "  Current coach: ${MAGENTA}${existing_coach}${RESET}"
   echo ""
   OVERWRITE_CHOICE=""
@@ -203,115 +232,121 @@ fi
 
 # ── Step 2: Read identity ───────────────────────────────────────────────────
 
-USER_NAME=""
-git_name=$(git config user.name 2>/dev/null || true)
-if [[ -n "$git_name" ]]; then
-  USER_NAME="$git_name"
-fi
-prompt_input "What's your name?" USER_NAME "$USER_NAME"
+if [[ "$UPGRADE_MODE" == "false" ]]; then
+  USER_NAME=""
+  git_name=$(git config user.name 2>/dev/null || true)
+  if [[ -n "$git_name" ]]; then
+    USER_NAME="$git_name"
+  fi
+  prompt_input "What's your name?" USER_NAME "$USER_NAME"
 
-if [[ -z "$USER_NAME" ]]; then
-  echo "  Name is required."
-  exit 1
+  if [[ -z "$USER_NAME" ]]; then
+    echo "  Name is required."
+    exit 1
+  fi
 fi
 
 # ── Step 3: Greet + explain ─────────────────────────────────────────────────
 
-echo ""
-echo -e "  Hey ${GREEN}${BOLD}${USER_NAME}${RESET}! Agent Coach is a personal mentor that watches"
-echo "  how you work with AI coding agents and helps you get better over time."
-echo ""
-echo "  It teaches you to:"
-echo -e "    ${CYAN}→${RESET} Run longer, more autonomous agent sessions"
-echo -e "    ${CYAN}→${RESET} Set up your codebases for agent success"
-echo -e "    ${CYAN}→${RESET} Close the verification loop so agents check their own work"
-echo ""
-echo -e "  First, let's give your coach a personality."
+if [[ "$UPGRADE_MODE" == "false" ]]; then
+  echo ""
+  echo -e "  Hey ${GREEN}${BOLD}${USER_NAME}${RESET}! Agent Coach is a personal mentor that watches"
+  echo "  how you work with AI coding agents and helps you get better over time."
+  echo ""
+  echo "  It teaches you to:"
+  echo -e "    ${CYAN}→${RESET} Run longer, more autonomous agent sessions"
+  echo -e "    ${CYAN}→${RESET} Set up your codebases for agent success"
+  echo -e "    ${CYAN}→${RESET} Close the verification loop so agents check their own work"
+  echo ""
+  echo -e "  First, let's give your coach a personality."
 
-# ── Step 4: Pick personality ────────────────────────────────────────────────
+  # ── Step 4: Pick personality ────────────────────────────────────────────────
 
-echo ""
-prompt_input "Pick a well-known person to be your coach
-  (movie character, programmer, historical figure, athlete, anyone)" PERSONALITY ""
+  echo ""
+  prompt_input "Pick a well-known person to be your coach
+    (movie character, programmer, historical figure, athlete, anyone)" PERSONALITY ""
 
-if [[ -z "$PERSONALITY" ]]; then
-  echo "  A personality is required to create your coach."
-  exit 1
+  if [[ -z "$PERSONALITY" ]]; then
+    echo "  A personality is required to create your coach."
+    exit 1
+  fi
+
+  # ── Step 5: Derive + confirm coach name ─────────────────────────────────────
+
+  DERIVED_NAME=$(derive_coach_name "$PERSONALITY")
+  echo ""
+  echo -e "  Your coach will be called ${MAGENTA}${BOLD}${DERIVED_NAME}${RESET}."
+  prompt_input "  Change it? (press Enter to keep)" COACH_NAME "$DERIVED_NAME"
+  COACH_NAME=$(echo "$COACH_NAME" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9-]//g')
+
+  if ! validate_name "$COACH_NAME"; then
+    echo "  Invalid name. Must be 2-30 lowercase alphanumeric chars or hyphens."
+    echo "  Cannot start or end with a hyphen."
+    exit 1
+  fi
+
+  # ── Step 6: Switch to in-character ──────────────────────────────────────────
+
+  echo ""
+  echo -e "  ${MAGENTA}${BOLD}${PERSONALITY} has entered the room.${RESET}"
+  echo ""
+  echo -e "  ${DIM}\"So, ${USER_NAME}, you want to get better at working with AI agents."
+  echo -e "   Good. Before we start, I need to know how you like to learn.\"${RESET}"
+
+  # ── Step 7: Style preference ───────────────────────────────────────────────
+
+  STYLE_CHOICE=""
+  prompt_choice \
+    "  \"How should I talk to you?\"" \
+    STYLE_CHOICE \
+    "Encouraging — Lead with wins, frame gaps as opportunities" \
+    "Direct — No fluff, straight observations" \
+    "Balanced — Read the room and adjust ${DIM}(recommended)${RESET}"
+
+  case "$STYLE_CHOICE" in
+    1) STYLE="encouraging" ;;
+    2) STYLE="direct" ;;
+    3) STYLE="balanced" ;;
+  esac
+
+  # ── Step 8: Opinion strength ───────────────────────────────────────────────
+
+  OPINION_CHOICE=""
+  prompt_choice \
+    "  \"And when I see something that needs fixing?\"" \
+    OPINION_CHOICE \
+    "Gentle — I'll suggest, never push" \
+    "Moderate — Clear recommendations, I explain why ${DIM}(recommended)${RESET}" \
+    "Strong — I'll challenge you directly, no hand-holding"
+
+  case "$OPINION_CHOICE" in
+    1) OPINION="gentle" ;;
+    2) OPINION="moderate" ;;
+    3) OPINION="strong" ;;
+  esac
+
+  # ── Step 8.5: Self-assessment ─────────────────────────────────────────────
+
+  echo ""
+  echo -e "  ${DIM}\"One more thing. Tell me a bit about how you work with AI coding agents today."
+  echo -e "   What do you use them for? How do your sessions typically go?"
+  echo -e "   A sentence or two is fine — or skip if you're brand new.\"${RESET}"
+  echo ""
+  SELF_ASSESSMENT=""
+  prompt_input "  Your experience" SELF_ASSESSMENT ""
+
+  # ── Step 9: Installation target ────────────────────────────────────────────
+
+  TARGET_CHOICE=""
+  prompt_choice \
+    "  \"Last thing — where should I set up shop?\"" \
+    TARGET_CHOICE \
+    "Codex  → ~/.codex/skills/${COACH_NAME}/" \
+    "Claude Code → ~/.claude/commands/${COACH_NAME}.md" \
+    "Custom path"
 fi
 
-# ── Step 5: Derive + confirm coach name ─────────────────────────────────────
-
-DERIVED_NAME=$(derive_coach_name "$PERSONALITY")
-echo ""
-echo -e "  Your coach will be called ${MAGENTA}${BOLD}${DERIVED_NAME}${RESET}."
-prompt_input "  Change it? (press Enter to keep)" COACH_NAME "$DERIVED_NAME"
-COACH_NAME=$(echo "$COACH_NAME" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9-]//g')
-
-if ! validate_name "$COACH_NAME"; then
-  echo "  Invalid name. Must be 2-30 lowercase alphanumeric chars or hyphens."
-  echo "  Cannot start or end with a hyphen."
-  exit 1
-fi
-
-# ── Step 6: Switch to in-character ──────────────────────────────────────────
-
-echo ""
-echo -e "  ${MAGENTA}${BOLD}${PERSONALITY} has entered the room.${RESET}"
-echo ""
-echo -e "  ${DIM}\"So, ${USER_NAME}, you want to get better at working with AI agents."
-echo -e "   Good. Before we start, I need to know how you like to learn.\"${RESET}"
-
-# ── Step 7: Style preference ───────────────────────────────────────────────
-
-STYLE_CHOICE=""
-prompt_choice \
-  "  \"How should I talk to you?\"" \
-  STYLE_CHOICE \
-  "Encouraging — Lead with wins, frame gaps as opportunities" \
-  "Direct — No fluff, straight observations" \
-  "Balanced — Read the room and adjust ${DIM}(recommended)${RESET}"
-
-case "$STYLE_CHOICE" in
-  1) STYLE="encouraging" ;;
-  2) STYLE="direct" ;;
-  3) STYLE="balanced" ;;
-esac
-
-# ── Step 8: Opinion strength ───────────────────────────────────────────────
-
-OPINION_CHOICE=""
-prompt_choice \
-  "  \"And when I see something that needs fixing?\"" \
-  OPINION_CHOICE \
-  "Gentle — I'll suggest, never push" \
-  "Moderate — Clear recommendations, I explain why ${DIM}(recommended)${RESET}" \
-  "Strong — I'll challenge you directly, no hand-holding"
-
-case "$OPINION_CHOICE" in
-  1) OPINION="gentle" ;;
-  2) OPINION="moderate" ;;
-  3) OPINION="strong" ;;
-esac
-
-# ── Step 8.5: Self-assessment ─────────────────────────────────────────────
-
-echo ""
-echo -e "  ${DIM}\"One more thing. Tell me a bit about how you work with AI coding agents today."
-echo -e "   What do you use them for? How do your sessions typically go?"
-echo -e "   A sentence or two is fine — or skip if you're brand new.\"${RESET}"
-echo ""
-SELF_ASSESSMENT=""
-prompt_input "  Your experience" SELF_ASSESSMENT ""
-
-# ── Step 9: Installation target ────────────────────────────────────────────
-
-TARGET_CHOICE=""
-prompt_choice \
-  "  \"Last thing — where should I set up shop?\"" \
-  TARGET_CHOICE \
-  "Codex  → ~/.codex/skills/${COACH_NAME}/" \
-  "Claude Code → ~/.claude/commands/${COACH_NAME}.md" \
-  "Custom path"
+# ── Derive paths from target choice ─────────────────────────────────────────
 
 INSTALL_TARGET=""
 SKILLS_PATH=""
@@ -330,10 +365,14 @@ case "$TARGET_CHOICE" in
     ;;
   3)
     INSTALL_TARGET="custom"
-    prompt_input "  Enter the full path" SKILLS_PATH ""
-    if [[ -z "$SKILLS_PATH" ]]; then
-      echo "  Path is required."
-      exit 1
+    if [[ "$UPGRADE_MODE" == "false" ]]; then
+      prompt_input "  Enter the full path" SKILLS_PATH ""
+      if [[ -z "$SKILLS_PATH" ]]; then
+        echo "  Path is required."
+        exit 1
+      fi
+    else
+      SKILLS_PATH="${AGENT_COACH_SKILLS_PATH:?Required for custom target in upgrade mode}"
     fi
     # Expand ~ if present
     SKILLS_PATH="${SKILLS_PATH/#\~/$HOME}"
@@ -347,16 +386,64 @@ echo ""
 echo -e "  ${DIM}Creating directories...${RESET}"
 PARTIAL_INSTALL=true
 
-mkdir -p -- "$STATE_DIR/codebase-notes"
+mkdir -p -- "$STATE_DIR"
 mkdir -p -- "$REFS_PATH"
 if [[ "$INSTALL_TARGET" != "claude-code" ]]; then
   mkdir -p -- "$SKILLS_PATH/references"
 fi
 
+# ── Step 10.5: Whitelist state directory in Claude Code settings ────────────
+
+CLAUDE_SETTINGS="$HOME/.claude/settings.json"
+if [[ -f "$CLAUDE_SETTINGS" ]]; then
+  echo -e "  ${DIM}Configuring Claude Code permissions...${RESET}"
+
+  # Check if permissions.allow array exists and add our paths if not already present
+  if python3 -c "
+import json
+import sys
+
+settings_path = '$CLAUDE_SETTINGS'
+state_dir = '$STATE_DIR'
+
+with open(settings_path, 'r') as f:
+    settings = json.load(f)
+
+# Ensure permissions.allow exists
+if 'permissions' not in settings:
+    settings['permissions'] = {}
+if 'allow' not in settings['permissions']:
+    settings['permissions']['allow'] = []
+
+allow_list = settings['permissions']['allow']
+
+# Patterns to add
+patterns_to_add = [
+    f'Edit({state_dir}/**)',
+    f'Write({state_dir}/**)',
+    f'Read({state_dir}/**)'
+]
+
+modified = False
+for pattern in patterns_to_add:
+    if pattern not in allow_list:
+        allow_list.append(pattern)
+        modified = True
+
+if modified:
+    with open(settings_path, 'w') as f:
+        json.dump(settings, f, indent=2)
+    print('added')
+else:
+    print('exists')
+" 2>/dev/null; then
+    echo -e "  ${DIM}State directory whitelisted.${RESET}"
+  fi
+fi
+
 # ── Step 11: Write state files ─────────────────────────────────────────────
 
 CREATED_AT=$(timestamp_iso)
-TODAY=$(today_date)
 
 # Write profile.json atomically using printf (safe against special chars)
 _profile_tmp=$(mktemp "${STATE_DIR}/profile.json.XXXXXX")
@@ -372,7 +459,9 @@ printf '{
   "created_at": "%s",
   "self_assessment": "%s",
   "focus_categories": [],
-  "suppressed_categories": []
+  "suppressed_categories": [],
+  "installed_version": %d,
+  "last_version_check": "%s"
 }\n' \
   "$VERSION" \
   "$(json_escape "$USER_NAME")" \
@@ -384,13 +473,15 @@ printf '{
   "$(json_escape "$SKILLS_PATH")" \
   "$CREATED_AT" \
   "$(json_escape "$SELF_ASSESSMENT")" \
-  > "$_profile_tmp"
+  "$VERSION" \
+  "$CREATED_AT" \
+  >"$_profile_tmp"
 mv "$_profile_tmp" "${STATE_DIR}/profile.json"
 
 # Write progression.json only if it doesn't already exist (preserve progress on reinstall)
 if [[ ! -f "${STATE_DIR}/progression.json" ]]; then
   _prog_tmp=$(mktemp "${STATE_DIR}/progression.json.XXXXXX")
-  cat > "$_prog_tmp" << 'PROG_EOF'
+  cat >"$_prog_tmp" <<'PROG_EOF'
 {
   "version": 1,
   "calibrated": false,
@@ -431,7 +522,7 @@ echo -e "  ${DIM}Writing reference files...${RESET}"
 
 # ── coaching-rubric.md ──
 
-cat > "${REFS_PATH}/coaching-rubric.md" << 'RUBRIC_EOF'
+cat >"${REFS_PATH}/coaching-rubric.md" <<'RUBRIC_EOF'
 # Coaching Rubric — Agent Prompting Observation Framework
 
 Use this rubric to observe the user's prompting behavior across seven categories.
@@ -482,7 +573,7 @@ for improvement, and select appropriate tips.
 - Doesn't mention relevant existing code
 - Starts coding requests without context
 
-**Tip direction:** Teach investment in context. CLAUDE.md is highest-leverage.
+**Tip direction:** Teach investment in context. CLAUDE.md/AGENTS.md is highest-leverage.
 
 ---
 
@@ -607,7 +698,7 @@ RUBRIC_EOF
 
 # ── gamification.md ──
 
-cat > "${REFS_PATH}/gamification.md" << 'GAMIFICATION_EOF'
+cat >"${REFS_PATH}/gamification.md" <<'GAMIFICATION_EOF'
 # Gamification System
 
 ## Levels
@@ -682,7 +773,7 @@ GAMIFICATION_EOF
 
 # ── prompting-tips.md ──
 
-cat > "${REFS_PATH}/prompting-tips.md" << 'TIPS_EOF'
+cat >"${REFS_PATH}/prompting-tips.md" <<'TIPS_EOF'
 # Prompting Tips — Agent Autonomy & Verification Focus
 
 Tips are organized by category and difficulty level.
@@ -694,7 +785,7 @@ Selection rules (enforced by SKILL.md):
 3. Respect focus_categories / suppressed_categories from profile
 4. No repeats from the user's last 10 sessions (check tips-log.jsonl)
 5. Match difficulty to user level (L1-2: beginner, L3: intermediate, L4-5: advanced)
-6. At Level 3+, weave in codebase-specific observations from codebase-notes
+6. At Level 3+, weave in codebase-specific observations from `.agent-readiness.md`
 7. When all static tips in a category are exhausted, generate novel tips from the rubric
 
 ---
@@ -739,7 +830,7 @@ Point the agent to relevant files before asking for changes. "Look at src/models
 When starting a session, briefly describe what you're working on and why. This primes the agent's understanding before any code-level requests.
 
 **CP-4** (intermediate)
-Keep your CLAUDE.md updated. Stale context is worse than no context — it sends the agent down wrong paths confidently.
+Keep your CLAUDE.md (or AGENTS.md) updated. Stale context is worse than no context — it sends the agent down wrong paths confidently.
 
 **CP-5** (intermediate)
 For large codebases, create module-level documentation (README in key directories). Agents navigate large projects better with local signposts.
@@ -842,7 +933,7 @@ Use plan mode for complex tasks. Let the agent analyze the codebase, propose an 
 ## Codebase Setup (CS)
 
 **CS-1** (beginner)
-Add a CLAUDE.md to your project root. Even a few lines about the tech stack, project structure, and key commands dramatically improves agent performance.
+Add a CLAUDE.md (or AGENTS.md for Codex) to your project root. Even a few lines about the tech stack, project structure, and key commands dramatically improves agent performance.
 
 **CS-2** (beginner)
 Make sure "how to run tests" is documented and works from the command line. If the agent can't run tests, it can't verify its own work.
@@ -903,7 +994,7 @@ echo -e "  ${DIM}Writing skill file...${RESET}"
 write_skill_md() {
   local target_file="$1"
 
-  cat > "$target_file" << 'SKILL_EOF'
+  cat >"$target_file" <<'SKILL_EOF'
 ---
 name: __COACH_NAME__
 description: >
@@ -948,7 +1039,9 @@ All persistent state lives in `__STATE_DIR__/`:
 - `progression.json` — Level, XP, badges, streaks, category stats, and `calibrated` flag (false until first-session calibration)
 - `tips-log.jsonl` — Append-only log of tips given (one JSON object per line)
 - `feedback.jsonl` — Append-only log of user feedback on tips (one JSON object per line)
-- `codebase-notes/<project-slug>.md` — Per-codebase agent-readiness assessments
+
+**Per-codebase state** lives in the repo itself (should be checked in):
+- `.agent-readiness.md` — Agent-readiness assessment for this codebase (in project root)
 
 ## Subcommand Routing
 
@@ -958,8 +1051,52 @@ Parse the user's invocation to determine the subcommand:
 - **"stats"** → Stats Subcommand
 - **"style"** or **"style <feedback>"** → Style Subcommand
 - **"analyze"** → Analyze Subcommand
+- **"update"** → Update Subcommand
 
 If the input doesn't match a subcommand, treat it as context for the Main Coaching Flow.
+
+---
+
+## Interaction Mode
+
+Before running the coaching flow, determine how the user is engaging with you.
+
+### Conversational Mode
+
+Detect if the user is talking TO you rather than requesting coaching feedback:
+
+**Signals of conversation:**
+- Greetings: "hey", "hi", "hello", "you there?", "sup"
+- Direct questions: contains "you" + question mark, or asks about "your" capabilities
+- Meta-queries: "what can you do", "how does this work", "help me understand"
+- Short casual input (under ~15 words with no code/technical context)
+- Reactions to your previous message: "thanks", "got it", "that makes sense", "I disagree"
+- Asking about their own progress: "how am I doing?", "what level?", "what should I work on?"
+
+**In conversational mode:**
+1. Respond naturally in character as __PERSONALITY__
+2. Have a genuine dialogue — answer questions, acknowledge their input, ask follow-up questions
+3. You may reference their stats, level, or codebase notes if relevant
+4. Do NOT force tips into the conversation
+5. If they seem to want feedback on their work, offer: "Want me to take a look at what you've been working on?"
+6. Keep responses concise and natural — this is a chat, not a lecture
+
+**Examples:**
+- "hey arnold, you there?" → Greet them warmly in character, maybe ask what they're working on
+- "what level am I?" → Check progression.json, tell them their level/XP in character
+- "any advice for this project?" → Check codebase notes, give targeted advice conversationally
+- "thanks, that tip was helpful" → Acknowledge warmly, maybe note it for feedback tracking
+
+### Coaching Mode
+
+If the input is NOT conversational (explicit coaching request, subcommand, or follows substantial work):
+- Proceed to **Subcommand Routing**
+- Run the full **Main Coaching Flow** with observation, tip selection, and feedback request
+
+**Signals of coaching request:**
+- Bare invocation after the user has been coding: `/<coach>` with no message
+- Explicit request: "give me feedback", "coach me", "what did I do wrong?"
+- Subcommands: "stats", "style", "analyze"
 
 ---
 
@@ -974,6 +1111,31 @@ Read these files (do not output their contents to the user):
 4. `__STATE_DIR__/feedback.jsonl` (last 20 entries)
 
 If any file is missing or corrupted, report in character and suggest running the installer again.
+
+### Step 1.1: Version Check (silent, max once per 7 days)
+
+After loading profile.json, perform a silent version check:
+
+1. Check `last_version_check` from profile.json
+   - If missing or more than 7 days old, proceed with check
+   - Otherwise, skip to Step 1.5
+
+2. Fetch remote version (fail silently if network unavailable):
+   ```bash
+   curl -sf --max-time 3 https://raw.githubusercontent.com/anthropics/agent-coach/main/VERSION
+   ```
+
+3. Compare with `installed_version` from profile.json
+
+4. Update `last_version_check` in profile.json to current ISO timestamp
+
+5. If remote version > installed version:
+   - Set internal flag `_update_available = true`
+   - Do NOT interrupt the coaching flow
+   - At the END of coaching delivery (Step 6), append:
+     "By the way, there's a new version of Agent Coach available. Run `/__COACH_NAME__ update` when you're ready."
+
+**Important**: Network failures should fail silently. Never let a version check failure break the skill.
 
 ### Step 1.5: Initial Calibration (first session only)
 
@@ -1023,22 +1185,11 @@ Set `last_session_date` to today.
 
 ### Step 3: Codebase Agent-Readiness Check
 
-Determine the current project by running `git remote get-url origin` in the working directory.
-This returns the clone URL (e.g., `git@github.com:anthropics/claude-code.git` or `https://github.com/anthropics/claude-code.git`).
+Look for `.agent-readiness.md` in the project root (the git working directory).
 
-Derive a slug from the remote URL:
-1. Strip the protocol/host prefix (`git@github.com:`, `https://github.com/`, etc.)
-2. Remove the `.git` suffix if present
-3. Replace `/` with `--` to make it filesystem-safe
-4. Example: `git@github.com:anthropics/claude-code.git` → `anthropics--claude-code`
+- **Does not exist** → Run the Agent-Readiness Assessment (see section below) silently. This is the first encounter with this codebase. Write the file and inform the user it should be checked in.
 
-If not in a git repo (no remote), fall back to the directory name as the slug.
-
-Check `__STATE_DIR__/codebase-notes/<project-slug>.md`:
-
-- **Does not exist** → Run the Agent-Readiness Assessment (see section below) silently. This is the first encounter with this codebase.
-
-- **Exists but stale (older than 7 days)** → Re-run the Agent-Readiness Assessment silently to refresh. Check the `Generated:` timestamp in the file header. Do NOT mention this refresh to the user — just use the updated information when selecting tips.
+- **Exists but stale (older than 7 days)** → Re-run the Agent-Readiness Assessment silently to refresh. Check the `last_updated:` timestamp in the file header. Do NOT mention this refresh to the user — just use the updated information when selecting tips.
 
 - **Exists and fresh** → Read it silently. Note any gaps to weave into tips naturally.
 
@@ -1133,6 +1284,23 @@ End the session with:
 
 This runs on first encounter with a codebase (Step 3) or when the user invokes the "analyze" subcommand.
 
+### Guiding Principle: Deterministic Tools Over Documentation
+
+When recommending improvements, **always prefer automated/deterministic tools over documentation or guidelines**:
+
+| Prefer | Over |
+|--------|------|
+| Formatter with config (Prettier, Black, rustfmt) | formatting-standards.md |
+| Linter with rules (ESLint, Clippy, Ruff) | style-guide.md |
+| Pre-commit hooks that run checks | "remember to run lint" |
+| Type checker in strict mode | type-conventions.md |
+| CI that blocks on failure | "please run tests before merging" |
+| ast-grep/semgrep rules | pattern-guidelines.md |
+
+**Why**: Tools enforce standards automatically and give the agent immediate feedback. Documentation requires the agent to read, interpret, and remember — which is error-prone. A failing lint check is unambiguous; a style guide is open to interpretation.
+
+When you find documentation without enforcement, recommend adding the corresponding tool. When you find neither, recommend the tool first, documentation second.
+
 ### What to Analyze
 
 Investigate the codebase systematically across these dimensions:
@@ -1174,9 +1342,14 @@ Investigate the codebase systematically across these dimensions:
 - For APIs: can the agent curl endpoints to verify?
 
 #### 7. Agent Documentation
-- CLAUDE.md / AGENTS.md present?
+- Check for agent instruction files (these are interchangeable):
+  - `CLAUDE.md` — Used by Claude Code
+  - `AGENTS.md` — Used by Codex
+  - Either file serves the same purpose: persistent context for the AI agent
+- If present, evaluate quality: Does it include tech stack, project structure, key commands, coding conventions?
+- If missing, this is a high-priority gap — recommend creating one
 - README with setup instructions?
-- Architecture docs?
+- Architecture docs or design decision records?
 
 #### 8. Verification Loop Completeness
 - Can an agent: write code → run tests → check lint → verify behavior?
@@ -1185,47 +1358,69 @@ Investigate the codebase systematically across these dimensions:
 
 ### Output
 
-Write the assessment to `__STATE_DIR__/codebase-notes/<project-slug>.md`:
+Write the assessment to `.agent-readiness.md` in the project root. This file should be checked into version control.
 
-**Important**: The `Generated:` line must be on line 2 with an ISO 8601 timestamp (e.g., `2026-02-05T12:00:00Z`) so the staleness check can parse it.
+**Important**: The `last_updated:` field in the YAML frontmatter must be an ISO 8601 timestamp so the staleness check can parse it.
+
+**Scoring guidance**: Award higher scores for automated enforcement. A codebase with ESLint + pre-commit hooks scores higher than one with a detailed style-guide.md. Documentation without tooling is worth partial credit at best.
 
 ```markdown
-# <Project Name> - Agent Readiness Assessment
-Generated: <ISO-8601-timestamp>
+---
+# Agent Readiness Assessment
+# Generated by Agent Coach (https://github.com/<org>/agent-coach)
+# This file helps AI coding agents understand what verification tools are available.
+# Check this file into version control and update it when you improve agent infrastructure.
+last_updated: <ISO-8601-timestamp>
+overall_score: X/10
+---
+
+# <Project Name> - Agent Readiness
 
 ## Summary
-Agent readiness score: X/10
-Key strengths: ...
-Critical gaps: ...
+**Score: X/10** | Key strengths: ... | Critical gaps: ...
 
-## Testing [score /10]
+## Testing [X/10]
+[Findings and specific commands the agent can run]
+
+## Linting & Formatting [X/10]
 [Findings and specific commands]
 
-## Linting & Formatting [score /10]
-[Findings and specific commands]
-
-## Static Analysis [score /10]
+## Static Analysis [X/10]
 [Findings]
 
-## Git Hooks [score /10]
+## Git Hooks [X/10]
 [Findings]
 
-## CI/CD [score /10]
+## CI/CD [X/10]
 [Findings]
 
-## Agent CLI Tools [score /10]
+## Agent CLI Tools [X/10]
 [Findings]
 
-## Documentation [score /10]
+## Documentation [X/10]
 [Findings]
 
 ## Verification Loop
 Can agent verify its work? [Yes/Partially/No]
 Gaps: ...
-Recommendations (prioritized): ...
+
+## Recommendations
+[Prioritized list of improvements — remember: deterministic tools over documentation]
 ```
 
-When presenting to the user, summarize findings **in character** with the top 3 actionable recommendations.
+When presenting to the user, summarize findings **in character** with the top 3 actionable recommendations. Remind them to check the file into version control.
+
+### Updating After Improvements
+
+When you help the user improve agent-readiness (adding tests, configuring linters, setting up CI, etc.), **always update `.agent-readiness.md`** after the changes are complete:
+
+1. Re-evaluate the relevant section(s)
+2. Update the score(s)
+3. Update `last_updated` timestamp
+4. Remove completed items from Recommendations
+5. Briefly note what was added (e.g., "Added ESLint with pre-commit hook")
+
+This keeps the assessment accurate and helps other agents (and humans) understand the current state.
 
 ---
 
@@ -1287,6 +1482,33 @@ When the user invokes `/<coach-name> analyze`:
 
 ---
 
+## Update Subcommand
+
+When the user invokes `/<coach-name> update`:
+
+1. Read `__STATE_DIR__/profile.json` to extract current settings
+2. Download the latest installer:
+   ```bash
+   curl -fsSL https://raw.githubusercontent.com/anthropics/agent-coach/main/install.sh -o /tmp/agent-coach-update.sh
+   ```
+3. Run in upgrade mode with preserved settings:
+   ```bash
+   AGENT_COACH_UPGRADE=1 \
+   AGENT_COACH_USER_NAME="<from profile.user_name>" \
+   AGENT_COACH_PERSONALITY="<from profile.personality>" \
+   AGENT_COACH_COACH_NAME="<from profile.coach_name>" \
+   AGENT_COACH_STYLE="<from profile.style>" \
+   AGENT_COACH_OPINION="<from profile.opinion_strength>" \
+   AGENT_COACH_TARGET="<from profile.install_target>" \
+   AGENT_COACH_SELF_ASSESSMENT="<from profile.self_assessment>" \
+   AGENT_COACH_SKILLS_PATH="<from profile.skills_path>" \
+   bash /tmp/agent-coach-update.sh
+   ```
+4. Clean up the temp file: `rm /tmp/agent-coach-update.sh`
+5. Announce completion in character: "Update complete! I've got some new tricks now."
+
+---
+
 ## Important Guidelines
 
 - **Never break character.** All output should sound like __PERSONALITY__.
@@ -1334,31 +1556,39 @@ echo -e "  ${DIM}Skill file written.${RESET}"
 
 # ── Step 14: Welcome message ──────────────────────────────────────────────
 
-echo ""
-echo -e "  ${GREEN}${BOLD}Installation complete!${RESET}"
-echo ""
-echo -e "  ${MAGENTA}${BOLD}${PERSONALITY}:${RESET}"
-echo ""
-echo -e "  ${DIM}\"I'm ready. Here's how this works:${RESET}"
-echo ""
+if [[ "$UPGRADE_MODE" == "true" ]]; then
+  echo ""
+  echo -e "  ${GREEN}${BOLD}Update complete!${RESET}"
+  echo -e "  ${DIM}Agent Coach updated to version ${VERSION}.${RESET}"
+  echo ""
+else
+  echo ""
+  echo -e "  ${GREEN}${BOLD}Installation complete!${RESET}"
+  echo ""
+  echo -e "  ${MAGENTA}${BOLD}${PERSONALITY}:${RESET}"
+  echo ""
+  echo -e "  ${DIM}\"I'm ready. Here's how this works:${RESET}"
+  echo ""
 
-echo -e "    ${CYAN}/${COACH_NAME}${RESET}          — Get coaching feedback on your session"
-echo -e "    ${CYAN}/${COACH_NAME} stats${RESET}    — See your progress and stats"
-echo -e "    ${CYAN}/${COACH_NAME} style${RESET}    — Tell me to adjust my coaching style"
-echo -e "    ${CYAN}/${COACH_NAME} analyze${RESET}  — I'll assess this codebase for agent-readiness"
+  echo -e "    ${CYAN}/${COACH_NAME}${RESET}          — Get coaching feedback on your session"
+  echo -e "    ${CYAN}/${COACH_NAME} stats${RESET}    — See your progress and stats"
+  echo -e "    ${CYAN}/${COACH_NAME} style${RESET}    — Tell me to adjust my coaching style"
+  echo -e "    ${CYAN}/${COACH_NAME} analyze${RESET}  — I'll assess this codebase for agent-readiness"
+  echo -e "    ${CYAN}/${COACH_NAME} update${RESET}   — Update Agent Coach to the latest version"
 
-echo ""
-echo -e "  ${DIM}Now go build something. I'll be watching.\"${RESET}"
-echo ""
+  echo ""
+  echo -e "  ${DIM}Now go build something. I'll be watching.\"${RESET}"
+  echo ""
 
-# Show installed paths
-echo -e "  ${DIM}Installed to:${RESET}"
-echo -e "    Skill:      ${SKILL_FILE}"
-if [[ "$INSTALL_TARGET" != "claude-code" ]]; then
-  echo -e "    References: ${REFS_PATH}/"
+  # Show installed paths
+  echo -e "  ${DIM}Installed to:${RESET}"
+  echo -e "    Skill:      ${SKILL_FILE}"
+  if [[ "$INSTALL_TARGET" != "claude-code" ]]; then
+    echo -e "    References: ${REFS_PATH}/"
+  fi
+  echo -e "    State:      ${STATE_DIR}/"
+  echo ""
 fi
-echo -e "    State:      ${STATE_DIR}/"
-echo ""
 
 # Success — disable the failure trap
 PARTIAL_INSTALL=false
