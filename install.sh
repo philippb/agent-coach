@@ -293,6 +293,16 @@ case "$OPINION_CHOICE" in
   3) OPINION="strong" ;;
 esac
 
+# ── Step 8.5: Self-assessment ─────────────────────────────────────────────
+
+echo ""
+echo -e "  ${DIM}\"One more thing. Tell me a bit about how you work with AI coding agents today."
+echo -e "   What do you use them for? How do your sessions typically go?"
+echo -e "   A sentence or two is fine — or skip if you're brand new.\"${RESET}"
+echo ""
+SELF_ASSESSMENT=""
+prompt_input "  Your experience" SELF_ASSESSMENT ""
+
 # ── Step 9: Installation target ────────────────────────────────────────────
 
 TARGET_CHOICE=""
@@ -360,6 +370,7 @@ printf '{
   "install_target": "%s",
   "skills_path": "%s",
   "created_at": "%s",
+  "self_assessment": "%s",
   "focus_categories": [],
   "suppressed_categories": []
 }\n' \
@@ -372,6 +383,7 @@ printf '{
   "$INSTALL_TARGET" \
   "$(json_escape "$SKILLS_PATH")" \
   "$CREATED_AT" \
+  "$(json_escape "$SELF_ASSESSMENT")" \
   > "$_profile_tmp"
 mv "$_profile_tmp" "${STATE_DIR}/profile.json"
 
@@ -381,6 +393,7 @@ if [[ ! -f "${STATE_DIR}/progression.json" ]]; then
   cat > "$_prog_tmp" << 'PROG_EOF'
 {
   "version": 1,
+  "calibrated": false,
   "level": 1,
   "level_name": "Prompter",
   "xp": 0,
@@ -931,8 +944,8 @@ Initial coaching style: **__STYLE__** | Initial opinion strength: **__OPINION__*
 ## State Files
 
 All persistent state lives in `__STATE_DIR__/`:
-- `profile.json` — User name, coach name, personality, style preferences
-- `progression.json` — Level, XP, badges, streaks, category stats
+- `profile.json` — User name, coach name, personality, style preferences, and `self_assessment` (free-form description of their agent experience)
+- `progression.json` — Level, XP, badges, streaks, category stats, and `calibrated` flag (false until first-session calibration)
 - `tips-log.jsonl` — Append-only log of tips given (one JSON object per line)
 - `feedback.jsonl` — Append-only log of user feedback on tips (one JSON object per line)
 - `codebase-notes/<project-slug>.md` — Per-codebase agent-readiness assessments
@@ -961,6 +974,42 @@ Read these files (do not output their contents to the user):
 4. `__STATE_DIR__/feedback.jsonl` (last 20 entries)
 
 If any file is missing or corrupted, report in character and suggest running the installer again.
+
+### Step 1.5: Initial Calibration (first session only)
+
+Check the `calibrated` field in progression.json. If `false`, this is the user's first session — perform calibration:
+
+1. Read `self_assessment` from profile.json
+2. Evaluate their described experience against these criteria:
+
+**Level 1 - Prompter (0 XP)**: New to AI agents, or no self-assessment provided
+- "never used them" / "just starting" / empty response
+- No mention of specific tools or workflows
+
+**Level 2 - Apprentice (100 XP)**: Some experience with basic usage
+- Uses agents for simple tasks (writing functions, explaining code, fixing bugs)
+- Sessions are typically short, one task at a time
+- May mention tools like Copilot, ChatGPT, or similar
+
+**Level 3 - Navigator (300 XP)**: Regular user with established patterns
+- Uses agents for multi-step tasks or feature implementation
+- Mentions running tests, using context, or iterating on output
+- Has developed personal workflows or preferences
+
+**Level 4 - Pilot (600 XP)**: Advanced user with sophisticated workflows
+- Describes long autonomous sessions or complex multi-file work
+- Mentions verification loops, test-driven approaches, or codebase setup
+- References specific agent features (plan mode, skills, MCP tools)
+
+**Level 5 - Commander (1000 XP)**: Expert — rare for new installs
+- Only assign if description shows mastery across all categories
+- Describes teaching others or building agent-optimized workflows
+
+3. Set the appropriate starting XP and level in progression.json
+4. Set `calibrated` to `true`
+5. Briefly acknowledge their experience level in-character when greeting them (e.g., "I see you've been working with agents for a while..." or "Welcome to the world of AI agents...")
+
+**Important**: Be generous but not inflated. When in doubt, place them one level lower — it's better to let them prove themselves and level up quickly than to start too high and give irrelevant tips.
 
 ### Step 2: Check Streak
 
