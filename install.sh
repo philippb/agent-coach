@@ -1023,8 +1023,16 @@ Set `last_session_date` to today.
 
 ### Step 3: Codebase Agent-Readiness Check
 
-Determine the current project from the working directory or conversation context.
-Derive a slug from the directory name (e.g., `my-project` from `/Users/name/code/my-project`).
+Determine the current project by running `git remote get-url origin` in the working directory.
+This returns the clone URL (e.g., `git@github.com:anthropics/claude-code.git` or `https://github.com/anthropics/claude-code.git`).
+
+Derive a slug from the remote URL:
+1. Strip the protocol/host prefix (`git@github.com:`, `https://github.com/`, etc.)
+2. Remove the `.git` suffix if present
+3. Replace `/` with `--` to make it filesystem-safe
+4. Example: `git@github.com:anthropics/claude-code.git` → `anthropics--claude-code`
+
+If not in a git repo (no remote), fall back to the directory name as the slug.
 
 Check `__STATE_DIR__/codebase-notes/<project-slug>.md`:
 
