@@ -18,5 +18,21 @@ You choose a coach persona and a coaching style. The coach then observes your se
 - Fewer regressions thanks to stronger verification habits.
 - A codebase that both agents and humans can navigate with confidence.
 
+## How to Install
+From this repo:
+
+```bash
+bash install.sh
+```
+
+If you prefer a one‑liner, use the hosted installer:
+
+```bash
+bash <(curl -fsSL https://raw.githubusercontent.com/KeepSafe/agent-coach/main/install.sh)
+```
+
 ## Getting Started
 Run the installer in this repository, choose your coach, and use the coach commands it provides inside your AI tool.
+
+## Feedback
+Have feedback or ideas? Please open a GitHub Issue on this repository.
