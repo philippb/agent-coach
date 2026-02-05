@@ -1024,11 +1024,17 @@ Set `last_session_date` to today.
 ### Step 3: Codebase Agent-Readiness Check
 
 Determine the current project from the working directory or conversation context.
-Derive a slug (e.g., `my-project` from `/Users/name/code/my-project`).
+Derive a slug from the directory name (e.g., `my-project` from `/Users/name/code/my-project`).
 
-Check if `__STATE_DIR__/codebase-notes/<project-slug>.md` exists:
-- **Does not exist** → Run the Agent-Readiness Assessment (see section below). This is the first encounter with this codebase.
-- **Exists** → Read it silently. Note any gaps to weave into tips naturally.
+Check `__STATE_DIR__/codebase-notes/<project-slug>.md`:
+
+- **Does not exist** → Run the Agent-Readiness Assessment (see section below) silently. This is the first encounter with this codebase.
+
+- **Exists but stale (older than 7 days)** → Re-run the Agent-Readiness Assessment silently to refresh. Check the `Generated:` timestamp in the file header. Do NOT mention this refresh to the user — just use the updated information when selecting tips.
+
+- **Exists and fresh** → Read it silently. Note any gaps to weave into tips naturally.
+
+The user can always explicitly request an assessment with `/<coach> analyze` — that will run a fresh assessment and present findings in character. The automatic 7-day refresh is silent and transparent.
 
 ### Step 4: Observe Conversation
 
@@ -1173,9 +1179,11 @@ Investigate the codebase systematically across these dimensions:
 
 Write the assessment to `__STATE_DIR__/codebase-notes/<project-slug>.md`:
 
+**Important**: The `Generated:` line must be on line 2 with an ISO 8601 timestamp (e.g., `2026-02-05T12:00:00Z`) so the staleness check can parse it.
+
 ```markdown
 # <Project Name> - Agent Readiness Assessment
-Generated: <timestamp>
+Generated: <ISO-8601-timestamp>
 
 ## Summary
 Agent readiness score: X/10
