@@ -95,7 +95,7 @@ bash install.sh
 If you prefer a one‑liner, use the hosted installer:
 
 ```bash
-bash <(curl -fsSL https://raw.githubusercontent.com/KeepSafe/agent-coach/main/install.sh)
+bash <(curl -fsSL https://raw.githubusercontent.com/philippb/agent-coach/main/install.sh)
 ```
 
 ## Getting Started
