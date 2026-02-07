@@ -103,3 +103,6 @@ Run the installer in this repository, choose your coach, and use the coach comma
 
 ## Feedback
 Have feedback or ideas? Please open a GitHub Issue on this repository.
+
+## License
+MIT (see `LICENSE`).
