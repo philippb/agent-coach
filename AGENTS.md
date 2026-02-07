@@ -29,6 +29,9 @@
 
 ## Commit & Pull Request Guidelines
 - Commit messages are short, sentence-case imperatives (see recent history).
+- When asked to create commits, use conventional commit types with descriptive emojis and an imperative subject.
+- Run pre-commit checks by default (lint/build/docs generation) unless explicitly told to skip verification.
+- If nothing is staged, stage the minimal relevant files; suggest splitting commits when changes mix concerns.
 - Keep changes small and reviewable; add tests when behavior changes.
 - PRs should describe what changed, how to test, and any expected side effects (e.g., new files under `~/.agent-coach`).
 
