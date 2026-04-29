@@ -1,6 +1,6 @@
 # Agent Coach
 
-Agent Coach is a personal prompting mentor for AI coding agents. It helps you get better at directing tools like Codex or Claude by giving focused coaching, building strong verification habits, and guiding you toward agent‑friendly codebases. The goal is simple: more reliable agent outcomes with less back‑and‑forth.
+Agent Coach is a personal prompting mentor for AI coding agents. It helps you get better at directing tools like Codex or Claude by giving focused coaching, building strong verification habits, and guiding you toward agent‑friendly codebases. The default coach is Flint: direct, witty, opinionated, and brief. The goal is simple: more reliable agent outcomes with less back‑and‑forth.
 
 ## Capabilities
 - Turn vague requests into clear, testable prompts.
@@ -10,7 +10,7 @@ Agent Coach is a personal prompting mentor for AI coding agents. It helps you ge
 - Assess codebase readiness and get prioritized, practical upgrades.
 
 ## How It Works
-You choose a coach persona and a coaching style. The coach then observes your sessions and gives short, concrete tips tied to what you just did. When you want a snapshot of progress, you can ask for stats. When you want to improve a repository for agents, you can request a readiness analysis and a clear action plan.
+Flint observes your sessions and gives short, concrete tips tied to what you just did. When you want a snapshot of progress, you can ask for stats. When you want to improve a repository for agents, you can request a readiness analysis and a clear action plan. It also indexes the skills installed in your Codex home so it can route you to the right one when you are stuck.
 
 ## Typical Outcomes
 - Clearer prompts that reduce guesswork.
@@ -99,7 +99,12 @@ bash <(curl -fsSL https://raw.githubusercontent.com/philippb/agent-coach/main/in
 ```
 
 ## Getting Started
-Run the installer in this repository, choose your coach, and use the coach commands it provides inside your AI tool.
+Run the installer in this repository, meet Flint, and use the coach commands it provides inside your AI tool.
+
+Useful commands after install:
+- `$flint` in Codex, or `/flint` in Claude Code, for feedback on your recent work
+- `$flint skills` / `/flint skills` to see installed skills the coach can route you to
+- `$flint analyze` / `/flint analyze` for a fresh repo readiness pass
 
 ## Feedback
 Have feedback or ideas? Please open a GitHub Issue on this repository.
