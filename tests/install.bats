@@ -27,14 +27,21 @@ INSTALL_INPUT
   [ -f "$HOME/.agent-coach/skill-atlas.json" ]
   [ -f "$HOME/.codex/skills/flint/SKILL.md" ]
   [ -f "$HOME/.codex/skills/flint/references/coaching-rubric.md" ]
+  [ -f "$HOME/.codex/skills/flint/references/openclaw-practices.md" ]
   [ -f "$HOME/.codex/skills/flint/references/SOUL.md" ]
   grep -q '"coach_name": "flint"' "$HOME/.agent-coach/profile.json"
   grep -q '"personality": "Flint"' "$HOME/.agent-coach/profile.json"
   grep -q '"interaction_mode": "strict"' "$HOME/.agent-coach/profile.json"
   grep -q '"progress_pulses"' "$HOME/.agent-coach/profile.json"
+  grep -q '"welcomed": false' "$HOME/.agent-coach/progression.json"
   grep -q '"feedback_tags"' "$HOME/.agent-coach/progression.json"
   grep -q '"name": "proof-stack"' "$HOME/.agent-coach/skill-atlas.json"
+  grep -q '## Main Coaching Flow' "$HOME/.codex/skills/flint/SKILL.md"
+  grep -q '### Step 1.4: First-Run Welcome' "$HOME/.codex/skills/flint/SKILL.md"
+  grep -q 'No tips, no rubric IDs' "$HOME/.codex/skills/flint/SKILL.md"
+  grep -q '### OpenClaw-Level Guidance' "$HOME/.codex/skills/flint/SKILL.md"
   grep -q '## Skills Subcommand' "$HOME/.codex/skills/flint/SKILL.md"
+  grep -q 'OpenClaw Practices' "$HOME/.codex/skills/flint/references/openclaw-practices.md"
   grep -q "Be the assistant you'd actually want to talk to at 2am" "$HOME/.codex/skills/flint/references/SOUL.md"
   printf '%s' "$output" | grep -q '\$flint stats'
   grep -q '"install_targets": \["codex"\]' "$HOME/.agent-coach/profile.json"

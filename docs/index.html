@@ -1,0 +1,720 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Flint Agent Coach</title>
+    <link
+      rel="icon"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%2303080b'/%3E%3Cpath d='M7 17h11l-4 6h6l5-10H14l4-6h-6z' fill='%2342e7ff'/%3E%3C/svg%3E" />
+    <meta
+      name="description"
+      content="Flint Agent Coach is a direct, witty coaching layer for AI coding workflows: sharper prompts, live tips, verification habits, and gamified progress." />
+
+    <style>
+      :root {
+        color-scheme: light dark;
+        --bg: #eef9fb;
+        --bg2: #f8fdff;
+        --panel: rgba(255, 255, 255, 0.72);
+        --panel2: rgba(207, 246, 255, 0.46);
+        --ink: #07161b;
+        --muted: rgba(7, 22, 27, 0.68);
+        --stroke: rgba(0, 135, 158, 0.22);
+        --stroke2: rgba(0, 135, 158, 0.36);
+        --blue: #007f9a;
+        --blue2: rgba(0, 191, 224, 0.18);
+        --line: rgba(0, 151, 178, 0.28);
+        --glow: rgba(0, 194, 232, 0.34);
+        --amber: #b76510;
+        --shadow: 0 18px 50px rgba(0, 83, 103, 0.16);
+
+        --display: "Avenir Next Condensed", "Bahnschrift Condensed", "DIN Condensed",
+          "Arial Narrow", sans-serif;
+        --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono",
+          "Courier New", monospace;
+        --sans: "Avenir Next", "Segoe UI", sans-serif;
+      }
+
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --bg: #03080b;
+          --bg2: #071319;
+          --panel: rgba(4, 17, 23, 0.72);
+          --panel2: rgba(3, 32, 42, 0.74);
+          --ink: #ecfbff;
+          --muted: rgba(236, 251, 255, 0.70);
+          --stroke: rgba(76, 232, 255, 0.22);
+          --stroke2: rgba(126, 244, 255, 0.34);
+          --blue: #42e7ff;
+          --blue2: rgba(66, 231, 255, 0.15);
+          --line: rgba(66, 231, 255, 0.24);
+          --glow: rgba(66, 231, 255, 0.46);
+          --amber: #ff9c32;
+          --shadow: 0 24px 90px rgba(0, 0, 0, 0.62);
+        }
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html,
+      body {
+        height: 100%;
+        scroll-behavior: smooth;
+      }
+
+      body {
+        margin: 0;
+        color: var(--ink);
+        background:
+          radial-gradient(circle at 50% -12%, var(--blue2), transparent 34rem),
+          linear-gradient(180deg, var(--bg2), var(--bg) 42rem);
+        font-family: var(--sans);
+      }
+
+      .dotGrid {
+        background-image:
+          linear-gradient(var(--line) 1px, transparent 1px),
+          linear-gradient(90deg, var(--line) 1px, transparent 1px),
+          radial-gradient(circle at 50% 0%, var(--blue2), transparent 36rem);
+        background-position: center top;
+        background-size: 44px 44px, 44px 44px, auto;
+        background-attachment: fixed;
+      }
+
+      .wrap {
+        max-width: 1120px;
+        margin: 0 auto;
+        padding: 22px 20px 74px;
+      }
+
+      header {
+        position: sticky;
+        top: 0;
+        z-index: 20;
+        backdrop-filter: blur(10px);
+        background: color-mix(in oklab, var(--bg), transparent 14%);
+        border-bottom: 1px solid var(--stroke);
+        box-shadow: 0 1px 22px rgba(0, 184, 220, 0.08);
+      }
+
+      .bar {
+        max-width: 1120px;
+        margin: 0 auto;
+        padding: 14px 20px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+      }
+
+      .brand {
+        display: inline-flex;
+        align-items: baseline;
+        gap: 6px;
+        text-decoration: none;
+        color: var(--ink);
+        text-transform: uppercase;
+      }
+
+      .brand .name {
+        font-family: var(--display);
+        font-weight: 800;
+        letter-spacing: 0.06em;
+        font-size: 22px;
+        line-height: 1;
+      }
+
+      .brand .dot {
+        font-family: var(--display);
+        font-weight: 900;
+        color: var(--blue);
+        font-size: 24px;
+        transform: translateY(1px);
+        text-shadow: 0 0 18px var(--glow);
+      }
+
+      .nav {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+        font-family: var(--mono);
+        font-size: 12px;
+      }
+
+      .nav a {
+        text-decoration: none;
+        color: var(--muted);
+        padding: 7px 10px;
+        border-radius: 6px;
+        border: 1px solid transparent;
+      }
+
+      .nav a:hover {
+        color: var(--ink);
+        border-color: var(--stroke);
+        background: var(--panel);
+      }
+
+      .hero {
+        min-height: calc(90vh - 62px);
+        padding-top: clamp(48px, 9vh, 96px);
+        padding-bottom: 52px;
+        display: grid;
+        align-items: center;
+      }
+
+      .heroGrid,
+      .progressGrid {
+        display: grid;
+        grid-template-columns: 1.05fr 0.95fr;
+        gap: 18px;
+        align-items: center;
+      }
+
+      .cmd,
+      .commandBlock {
+        border: 1px solid var(--stroke);
+        background: var(--panel);
+        font-family: var(--mono);
+        color: var(--muted);
+        box-shadow: inset 0 0 24px rgba(0, 188, 226, 0.08);
+      }
+
+      .cmd {
+        display: inline-flex;
+        gap: 10px;
+        align-items: center;
+        max-width: 100%;
+        padding: 8px 12px;
+        border-radius: 8px;
+        font-size: 12px;
+      }
+
+      .cmd span,
+      .commandText {
+        overflow-wrap: anywhere;
+      }
+
+      .copyButton {
+        flex: 0 0 auto;
+        border: 1px solid var(--stroke);
+        background: var(--bg);
+        color: var(--muted);
+        border-radius: 6px;
+        padding: 4px 10px;
+        cursor: pointer;
+        font-family: var(--mono);
+        font-size: 12px;
+      }
+
+      .copyButton:hover {
+        background: var(--panel);
+        color: var(--ink);
+      }
+
+      .kicker {
+        margin-top: 24px;
+        font-family: var(--mono);
+        font-size: 12px;
+        letter-spacing: 0.16em;
+        text-transform: uppercase;
+        color: var(--blue);
+        text-shadow: 0 0 16px var(--glow);
+      }
+
+      h1 {
+        margin: 14px 0 0;
+        font-family: var(--display);
+        font-size: 70px;
+        line-height: 0.95;
+        letter-spacing: 0;
+        text-transform: uppercase;
+      }
+
+      .lede {
+        margin: 14px 0 0;
+        color: var(--muted);
+        font-size: 16px;
+        line-height: 1.6;
+        max-width: 70ch;
+      }
+
+      .ctaRow {
+        margin-top: 16px;
+        display: flex;
+        gap: 10px;
+        align-items: center;
+        flex-wrap: wrap;
+      }
+
+      .btn {
+        display: inline-flex;
+        gap: 10px;
+        align-items: center;
+        padding: 10px 12px;
+        border-radius: 6px;
+        border: 1px solid var(--stroke);
+        text-decoration: none;
+        font-weight: 700;
+        font-size: 13px;
+        color: var(--ink);
+        background: var(--bg);
+        box-shadow: inset 0 0 18px rgba(0, 188, 226, 0.06);
+      }
+
+      .btn.primary {
+        border-color: var(--stroke2);
+        background: linear-gradient(
+          135deg,
+          var(--blue2),
+          color-mix(in oklab, var(--panel), transparent 10%)
+        );
+        color: var(--ink);
+      }
+
+      .btn:hover {
+        background: var(--panel);
+      }
+
+      .note {
+        font-family: var(--mono);
+        font-size: 12px;
+        color: var(--muted);
+      }
+
+      .placeholder {
+        min-height: 300px;
+        border: 1px solid var(--stroke);
+        background:
+          linear-gradient(180deg, rgba(255, 255, 255, 0.09), transparent),
+          radial-gradient(circle at 50% 0%, var(--blue2), transparent 70%),
+          var(--panel);
+        border-radius: 8px;
+        overflow: hidden;
+        box-shadow: var(--shadow);
+        position: relative;
+        display: grid;
+        align-content: end;
+        padding: 18px;
+      }
+
+      .generatedImage {
+        padding: 0;
+        min-height: 0;
+        aspect-ratio: 33 / 14;
+        align-content: stretch;
+      }
+
+      .placeholder::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        background-image:
+          linear-gradient(var(--line) 1px, transparent 1px),
+          linear-gradient(90deg, var(--line) 1px, transparent 1px);
+        background-size: 34px 34px;
+        opacity: 0.58;
+      }
+
+      .placeholder::after {
+        content: "";
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+        background:
+          linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.08), transparent),
+          linear-gradient(180deg, transparent 78%, rgba(0, 229, 255, 0.18));
+        mix-blend-mode: screen;
+      }
+
+      .generatedImage img {
+        position: absolute;
+        inset: 0;
+        z-index: 1;
+        display: block;
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+      }
+
+      .section {
+        padding-top: 80px;
+      }
+
+      .section.compact {
+        padding-top: 64px;
+      }
+
+      .sectionHead {
+        margin-bottom: 12px;
+      }
+
+      .label {
+        font-family: var(--mono);
+        font-size: 12px;
+        letter-spacing: 0.16em;
+        text-transform: uppercase;
+        color: var(--blue);
+      }
+
+      h2 {
+        margin: 10px 0 0;
+        font-family: var(--display);
+        font-size: 42px;
+        letter-spacing: 0;
+        line-height: 1.05;
+        text-transform: uppercase;
+      }
+
+      .grid {
+        margin-top: 14px;
+        display: grid;
+        grid-template-columns: repeat(12, minmax(0, 1fr));
+        gap: 12px;
+      }
+
+      .card,
+      .installPanel {
+        border: 1px solid var(--stroke);
+        background: var(--panel);
+        border-radius: 8px;
+        padding: 14px;
+        overflow: hidden;
+        box-shadow: inset 0 0 28px rgba(0, 188, 226, 0.06);
+      }
+
+      .card h3 {
+        margin: 0;
+        font-family: var(--mono);
+        font-size: 12px;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--blue);
+      }
+
+      .card p {
+        margin: 10px 0 0;
+        color: var(--muted);
+        font-size: 14px;
+        line-height: 1.55;
+      }
+
+      .span7 {
+        grid-column: span 7;
+      }
+
+      .span5 {
+        grid-column: span 5;
+      }
+
+      .span4 {
+        grid-column: span 4;
+      }
+
+      .progressList {
+        display: grid;
+        gap: 8px;
+      }
+
+      .installPanel {
+        padding: clamp(24px, 5vw, 48px);
+      }
+
+      .commandBlock {
+        margin-top: 18px;
+        border-radius: 8px;
+        padding: 16px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 14px;
+        font-size: 16px;
+      }
+
+      footer {
+        margin-top: 48px;
+        padding-top: 14px;
+        border-top: 1px solid var(--stroke);
+        color: var(--muted);
+        font-family: var(--mono);
+        font-size: 12px;
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        justify-content: space-between;
+      }
+
+      footer a {
+        color: var(--blue);
+        text-decoration: none;
+      }
+
+      @media (max-width: 980px) {
+        .heroGrid,
+        .progressGrid {
+          grid-template-columns: 1fr;
+        }
+
+        .span7,
+        .span5,
+        .span4 {
+          grid-column: span 12;
+        }
+      }
+
+      @media (max-width: 720px) {
+        .bar {
+          align-items: flex-start;
+          flex-direction: column;
+        }
+
+        .nav {
+          width: 100%;
+          justify-content: space-between;
+        }
+
+        .hero {
+          min-height: auto;
+        }
+
+        h1 {
+          font-size: 44px;
+        }
+
+        h2 {
+          font-size: 32px;
+        }
+
+        .commandBlock {
+          align-items: flex-start;
+          flex-direction: column;
+        }
+
+        .generatedImage {
+          aspect-ratio: 16 / 9;
+        }
+      }
+    </style>
+  </head>
+
+  <body class="dotGrid">
+    <header>
+      <div class="bar">
+        <a class="brand" href="./">
+          <span class="name">Flint Agent Coach</span>
+          <span class="dot">.</span>
+        </a>
+        <nav class="nav" aria-label="Top navigation">
+          <a href="../README.md">Docs</a>
+          <a href="https://github.com/philippb/agent-coach">GitHub</a>
+          <a href="#install">Install</a>
+        </nav>
+      </div>
+    </header>
+
+    <main class="wrap">
+      <section class="hero">
+        <div class="heroGrid">
+          <div>
+            <div class="cmd">
+              <span class="commandText"
+                >$ bash &lt;(curl -fsSL
+                https://raw.githubusercontent.com/philippb/agent-coach/main/install.sh)</span
+              >
+              <button class="copyButton" data-copy-install type="button">Copy</button>
+            </div>
+            <div class="kicker">Your agent's corner coach</div>
+            <h1>
+              Better prompts.
+              <span style="color: var(--blue)">Fewer loops.</span>
+              Proof it worked.
+            </h1>
+            <p class="lede">
+              Flint is a coaching layer that lives inside your AI coding workflow. It watches
+              how you prompt, suggests what to tighten, and builds a verification habit that
+              sticks. Direct enough to be useful. Funny enough to keep the loop human.
+            </p>
+            <div class="ctaRow">
+              <a class="btn primary" href="#install">Install Flint</a>
+              <a class="btn" href="../README.md">Read the docs</a>
+              <span class="note">Works with Claude Code and Codex. MIT licensed.</span>
+            </div>
+          </div>
+
+          <div class="placeholder generatedImage">
+            <img
+              src="assets/2026-04-29-hero-terminal-grid.png"
+              alt="Terminal window on a neon grid showing Flint coaching an AI prompt with a verification checkmark" />
+          </div>
+        </div>
+      </section>
+
+      <section class="section" aria-label="What Flint does">
+        <div class="sectionHead">
+          <div class="label">What you get</div>
+          <h2>One coach. Three habits.</h2>
+        </div>
+
+        <div class="grid">
+          <article class="card span7">
+            <h3>Prompt sharpening</h3>
+            <p>
+              Flint turns "make it better" into constraints, acceptance criteria, and a clear
+              definition of done. Your agent stops guessing.
+            </p>
+          </article>
+
+          <article class="card span5">
+            <h3>Verification loop</h3>
+            <p>
+              Every task ends with proof. Flint nudges you to pick the smallest check that
+              actually proves the behavior changed.
+            </p>
+          </article>
+
+          <article class="card span4">
+            <h3>Live observation</h3>
+            <p>
+              Flint watches your session and drops tips tied to what you just did: not a wall
+              of theory, a single next move.
+            </p>
+          </article>
+
+          <article class="card span4">
+            <h3>Direct tasking</h3>
+            <p>
+              Ask Flint to review a prompt, tighten a spec, or suggest what to verify. It's a
+              conversation, not a rulebook.
+            </p>
+          </article>
+
+          <article class="card span4">
+            <h3>Codebase readiness</h3>
+            <p>
+              Run an analysis on any repo. Flint tells you what's blocking agent autonomy and
+              gives you a prioritized fix list.
+            </p>
+          </article>
+        </div>
+      </section>
+
+      <section class="section compact" aria-label="How it works">
+        <div class="sectionHead">
+          <div class="label">Workflow</div>
+          <h2>Small loops, repeated.</h2>
+        </div>
+
+        <div class="grid">
+          <article class="card span4">
+            <h3>1. Clarify</h3>
+            <p>
+              Goal, constraints, risks, acceptance criteria. If you can't say what "done"
+              looks like, Flint will ask.
+            </p>
+          </article>
+          <article class="card span4">
+            <h3>2. Verify</h3>
+            <p>Pick the smallest checks that prove behavior. No "it probably works."</p>
+          </article>
+          <article class="card span4">
+            <h3>3. Ship</h3>
+            <p>Lock in a regression, keep the diff reviewable, and move on.</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="section" aria-label="Progress tracking">
+        <div class="sectionHead">
+          <div class="label">Progress</div>
+          <h2>Track the reps. See the change.</h2>
+          <p class="lede">
+            Flint tracks your sessions, tips, and streaks. Level up from Prompter to
+            Commander. It's not gamification for its own sake; it's a mirror that shows
+            whether your habits are actually improving.
+          </p>
+        </div>
+
+        <div class="progressGrid">
+          <div class="placeholder generatedImage">
+            <img
+              src="assets/2026-04-29-progress-dashboard.png"
+              alt="Flint progress dashboard showing level, streak counter, and earned badges on a dark grid background" />
+          </div>
+
+          <div class="progressList">
+            <article class="card">
+              <h3>Levels</h3>
+              <p>Five ranks from Prompter to Commander. XP from sessions, tips, and streaks.</p>
+            </article>
+            <article class="card">
+              <h3>Streaks</h3>
+              <p>Consecutive days build your streak. Miss a day, it resets; your best stays recorded.</p>
+            </article>
+            <article class="card">
+              <h3>Badges</h3>
+              <p>Milestone, mastery, and streak badges. Earn them by doing the work.</p>
+            </article>
+            <article class="card">
+              <h3>Honest critic</h3>
+              <p>You get XP for rejecting tips too. Flint respects a "no" when you can defend it.</p>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section class="section" id="install" aria-label="Install Flint Agent Coach">
+        <div class="installPanel">
+          <div class="label">Install</div>
+          <h2>One line. Zero dependencies.</h2>
+          <p class="lede">
+            Run the installer and meet Flint. Works with Claude Code and Codex out of the box.
+          </p>
+          <div class="commandBlock">
+            <span class="commandText"
+              >$ bash &lt;(curl -fsSL
+              https://raw.githubusercontent.com/philippb/agent-coach/main/install.sh)</span
+            >
+            <button class="copyButton" data-copy-install type="button">Copy</button>
+          </div>
+          <p class="note">
+            Or clone the repo and run <span style="color: var(--blue)">bash install.sh</span>
+            locally. MIT licensed. Read the source first if you want; Flint would.
+          </p>
+        </div>
+      </section>
+
+      <footer>
+        <span>Flint Agent Coach - MIT</span>
+        <span>
+          <a href="https://github.com/philippb/agent-coach">GitHub</a> ·
+          <a href="../README.md">Docs</a> · <a href="#install">Install</a>
+        </span>
+      </footer>
+    </main>
+
+    <script>
+      (function () {
+        var installCommand =
+          "bash <(curl -fsSL https://raw.githubusercontent.com/philippb/agent-coach/main/install.sh)";
+        var buttons = document.querySelectorAll("[data-copy-install]");
+
+        buttons.forEach(function (button) {
+          button.addEventListener("click", async function () {
+            try {
+              await navigator.clipboard.writeText(installCommand);
+              button.textContent = "Copied";
+              setTimeout(function () {
+                button.textContent = "Copy";
+              }, 900);
+            } catch (e) {
+              /* ignore */
+            }
+          });
+        });
+      })();
+    </script>
+  </body>
+</html>

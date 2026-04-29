@@ -8,6 +8,7 @@ Agent Coach is a personal prompting mentor for AI coding agents. It helps you ge
 - Adapt coaching style to your preference: direct, balanced, or encouraging.
 - Track progress with levels, streaks, and badges.
 - Assess codebase readiness and get prioritized, practical upgrades.
+- Guide a repo toward OpenClaw-level agent practices: repo contracts, cheap proof gates, reusable skills, behavior scenarios, and evidence discipline.
 
 ## How It Works
 Flint observes your sessions and gives short, concrete tips tied to what you just did. When you want a snapshot of progress, you can ask for stats. When you want to improve a repository for agents, you can request a readiness analysis and a clear action plan. It also indexes the skills installed in your Codex home so it can route you to the right one when you are stuck.
@@ -101,10 +102,13 @@ bash <(curl -fsSL https://raw.githubusercontent.com/philippb/agent-coach/main/in
 ## Getting Started
 Run the installer in this repository, meet Flint, and use the coach commands it provides inside your AI tool.
 
+The first time you invoke Flint, he starts with a short orientation instead of a full coaching report: what he does, how to talk to him, your current level/streak, and what to bring next. After that, use him on real work so the feedback is grounded in your actual prompt behavior.
+
 Useful commands after install:
 - `$flint` in Codex, or `/flint` in Claude Code, for feedback on your recent work
 - `$flint skills` / `/flint skills` to see installed skills the coach can route you to
 - `$flint analyze` / `/flint analyze` for a fresh repo readiness pass
+- Ask `$flint what should I change in this repo?` for direct agent-readiness upgrades, or ask for a step-by-step path to OpenClaw-level practices
 
 ## Feedback
 Have feedback or ideas? Please open a GitHub Issue on this repository.
